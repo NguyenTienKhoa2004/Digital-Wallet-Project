@@ -13,6 +13,8 @@ RUN chmod +x mvnw
 
 RUN --mount=type=cache,target=/root/.m2 \
     ./mvnw -B dependency:go-offline
+    
+COPY config/checkstyle/ config/checkstyle/
 
 COPY src/ src/
 
