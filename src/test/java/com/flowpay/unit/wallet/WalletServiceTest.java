@@ -95,7 +95,7 @@ class WalletServiceTest {
 		Wallet wallet = walletCaptor.getValue();
 		assertThat(wallet).hasFieldOrPropertyWithValue("userId", userId);
 		assertThat(wallet.getBalance()).isZero();
-		assertThat(wallet.getCurrency()).isEqualTo("USD");
+		assertThat(wallet.getCurrency()).isEqualTo("VND");
 		assertThat(wallet.getStatus()).isEqualTo(WalletStatus.ACTIVE);
 		assertThat(wallet.getCreatedAt()).isNotNull();
 		assertThat(wallet.getUpdatedAt()).isEqualTo(wallet.getCreatedAt());
@@ -107,10 +107,10 @@ class WalletServiceTest {
 				.hasFieldOrPropertyWithValue("accountCode", "WALLET_" + walletId)
 				.hasFieldOrPropertyWithValue("purpose", "WALLET")
 				.hasFieldOrPropertyWithValue("accountingType", "LIABILITY")
-				.hasFieldOrPropertyWithValue("currency", "USD")
+				.hasFieldOrPropertyWithValue("currency", "VND")
 				.hasFieldOrPropertyWithValue("createdAt", wallet.getCreatedAt());
 
-		assertThat(response).isEqualTo(new WalletResponse(walletId, 0, "USD", WalletStatus.ACTIVE,
+		assertThat(response).isEqualTo(new WalletResponse(walletId, 0, "VND", WalletStatus.ACTIVE,
 				wallet.getCreatedAt(), wallet.getUpdatedAt()));
 	}
 
