@@ -32,10 +32,13 @@ public class SecurityConfiguration {
 				.requestCache(cache -> cache.disable())
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login").permitAll()
-						.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/error").permitAll()
+						.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/error")
+						.permitAll()
 						.requestMatchers("/admin/**").hasRole("ADMIN")
 						.anyRequest().authenticated())
-				.exceptionHandling(errors -> errors.authenticationEntryPoint(securityErrors).accessDeniedHandler(securityErrors))
+				.exceptionHandling(errors -> errors
+						.authenticationEntryPoint(securityErrors)
+						.accessDeniedHandler(securityErrors))
 				.oauth2ResourceServer(resource -> resource
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(authentication))
 						.authenticationEntryPoint(securityErrors).accessDeniedHandler(securityErrors))

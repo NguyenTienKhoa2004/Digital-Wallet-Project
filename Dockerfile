@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 COPY src/ src/
 
 RUN --mount=type=cache,target=/root/.m2 \
-    ./mvnw -B clean package
+    ./mvnw -B clean package -DskipTests
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre AS runtime

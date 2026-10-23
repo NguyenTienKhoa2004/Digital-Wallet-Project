@@ -1,5 +1,6 @@
 package com.flowpay.unit.wallet;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -112,6 +113,36 @@ class WalletServiceTest {
 
 		assertThat(response).isEqualTo(new WalletResponse(walletId, 0, "USD", WalletStatus.ACTIVE,
 				wallet.getCreatedAt(), wallet.getUpdatedAt()));
+	}
+
+	@Test
+	void returnsWalletOwnedByAuthenticatedUser() {
+		Instant now = Instant.now();
+		UUID walletId = UUID.randomUUID();
+		Wallet wallet = Wallet.create(userId, now);
+		ReflectionTestUtils.setField(wallet, "id", walletId);
+		when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
+
+		WalletResponse response = walletService.getWallet(userId);
+
+		assertThat(response).isEqualTo(
+				new WalletResponse(walletId, 0, "USD", WalletStatus.ACTIVE, now, now));
+		verify(walletRepository).findByUserId(userId);
+		verifyNoInteractions(userRepository, ledgerAccountRepository);
+	}
+
+	@Test
+	void rejectsWalletQueryWhenAuthenticatedUserHasNoWallet() {
+		when(walletRepository.findByUserId(userId)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> walletService.getWallet(userId))
+				.isInstanceOfSatisfying(ApiException.class, exception -> {
+					assertThat(exception.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+					assertThat(exception.getCode()).isEqualTo("WALLET_NOT_FOUND");
+				});
+
+		verify(walletRepository).findByUserId(userId);
+		verifyNoInteractions(userRepository, ledgerAccountRepository);
 	}
 
 	private void givenExistingUser() {

@@ -43,4 +43,11 @@ public class WalletService {
 		return WalletResponse.from(wallet);
 	}
 
+	public WalletResponse getWallet(UUID authenticatedUserId) {
+		Wallet wallet = walletRepository.findByUserId(authenticatedUserId).orElseThrow(() ->
+				new ApiException(HttpStatus.NOT_FOUND, "WALLET_NOT_FOUND", "User does not have a wallet."));
+		return WalletResponse.from(wallet);
+	}
+
+
 }

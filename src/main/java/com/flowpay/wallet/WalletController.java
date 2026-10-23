@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +26,11 @@ public class WalletController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public WalletResponse createWallet(@AuthenticationPrincipal Jwt jwt) {
 		return walletService.createWallet(UUID.fromString(jwt.getSubject()));
+	}
+
+	@GetMapping("/me")
+	public WalletResponse getWallet(@AuthenticationPrincipal Jwt jwt) {
+		return walletService.getWallet(UUID.fromString(jwt.getSubject()));
 	}
 
 }
