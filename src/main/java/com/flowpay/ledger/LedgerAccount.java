@@ -51,4 +51,8 @@ public class LedgerAccount {
 		return account;
 	}
 
+	public UUID getId() {
+		return id;
+	}
+
 }

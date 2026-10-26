@@ -6,15 +6,37 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.dao.DataAccessException;
+import org.springframework.transaction.TransactionException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
 	@ExceptionHandler(ApiException.class)
 	public ProblemDetail handleApiException(ApiException exception) {
-		ProblemDetail problem = ProblemDetail.forStatusAndDetail(exception.getStatus(), exception.getMessage());
-		problem.setProperty("code", exception.getCode());
-		return problem;
+		return exception.toProblemDetail();
+	}
+
+	@ExceptionHandler(MissingRequestHeaderException.class)
+	public ProblemDetail handleMissingHeader(MissingRequestHeaderException exception) {
+		return new ApiException(HttpStatus.BAD_REQUEST, "MISSING_REQUIRED_HEADER",
+				"Required header is missing: " + exception.getHeaderName()).toProblemDetail();
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ProblemDetail handleInvalidParameter(MethodArgumentTypeMismatchException exception) {
+		return new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER",
+				"Invalid query parameter: " + exception.getName()).toProblemDetail();
+	}
+
+	@ExceptionHandler({DataAccessException.class, TransactionException.class})
+	public ProblemDetail handleUnconfirmedOutcome(RuntimeException exception) {
+		// A DB/commit error does not prove that a financial operation failed.
+		return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "OPERATION_OUTCOME_UNKNOWN",
+				"The outcome could not be confirmed. Look up the result or retry with the same Idempotency-Key.")
+				.toProblemDetail();
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

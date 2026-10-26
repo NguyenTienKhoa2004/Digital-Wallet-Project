@@ -1,6 +1,7 @@
 package com.flowpay.wallet;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -54,8 +55,36 @@ public class Wallet {
 		return wallet;
 	}
 
+	public void debit(long amount, Instant now) {
+		validateAmount(amount);
+		Objects.requireNonNull(now, "now must not be null");
+
+		if (balance < amount) {
+			throw new IllegalStateException("Insufficient balance.");
+		}
+
+		balance -= amount;
+		updatedAt = now;
+	}
+	public void credit(long amount, Instant now) {
+		validateAmount(amount);
+		Objects.requireNonNull(now, "now must not be null");
+
+		balance = Math.addExact(balance, amount);
+		updatedAt = now;
+	}
+
+	private void validateAmount(long amount) {
+		if (amount <= 0) {
+			throw new IllegalArgumentException("Amount must be positive.");
+		}
+	}
+
 	public UUID getId() {
 		return id;
+	}
+	public UUID getUserId() {
+		return userId;
 	}
 
 	public long getBalance() {

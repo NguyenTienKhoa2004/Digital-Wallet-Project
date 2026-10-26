@@ -1,6 +1,6 @@
 # FlowPay Backend
 
-Backend cho ví điện tử FlowPay. Đã có đăng ký/đăng nhập JWT, API tạo ví cùng ledger account, PostgreSQL, Flyway và health endpoint. Chưa triển khai chuyển tiền, nạp tiền hoặc đối soát.
+Backend cho ví điện tử FlowPay. Đã có đăng ký/đăng nhập JWT, tạo ví và chuyển tiền nội bộ với idempotency, double-entry ledger, lịch sử và tra cứu kết quả. Chưa triển khai nạp tiền hoặc đối soát.
 
 Xem [Tổng quan kỹ thuật](FlowPayTechnicalOverview.md) để hiểu cấu trúc thư mục, kiến trúc đề xuất, luồng khởi động và cách làm việc với database.
 
@@ -68,11 +68,13 @@ Mở PostgreSQL CLI trong container:
 docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
-Migration `V1` tạo schema `flowpay`; `V2__create_business_tables.sql` tạo 7 bảng P0 và bảng lịch sử đối soát P1 theo [ERD](FlowPayERD.md), cùng FK, UNIQUE, CHECK và index. `V3__add_user_password_hash.sql` bổ sung mật khẩu đã băm. User cũ không có password hash không thể đăng nhập; không gán mật khẩu mặc định cho các user này. Không sửa migration đã áp dụng; tạo phiên bản mới.
+Migration `V1` tạo schema `flowpay`; `V2__create_business_tables.sql` tạo 7 bảng P0 và bảng lịch sử đối soát P1 theo [ERD](FlowPayERD.md), cùng FK, UNIQUE, CHECK và index. `V3__add_user_password_hash.sql` bổ sung mật khẩu đã băm. `V4__protect_ledger_entries.sql` chặn UPDATE/DELETE trên ledger entries bằng trigger. User cũ không có password hash không thể đăng nhập; không gán mật khẩu mặc định cho các user này. Không sửa migration đã áp dụng; tạo phiên bản mới.
 
-Các cột `updated_at` phải được application truyền khi insert và cập nhật khi sửa dữ liệu. Các quy tắc liên bảng (cân bằng ledger, posting một lần, trạng thái cuối) cần service transaction và khóa phù hợp. Chưa cấu hình role database riêng để cấm UPDATE/DELETE ledger; user local của Compose không phải role giới hạn quyền cho production.
+Các cột `updated_at` phải được application truyền khi insert và cập nhật khi sửa dữ liệu. Chuyển tiền ghi số dư, transaction, ledger và idempotency trong cùng database transaction, khóa hai ví theo thứ tự ID cố định. Ledger entries chỉ được thêm; điều chỉnh sau này phải qua giao dịch bù. User local của Compose là owner; production vẫn cần role database giới hạn quyền, không được phép vô hiệu hóa trigger.
 
 ## Test và build
+
+API chuyển tiền, quy tắc retry/timeout và các quyết định MVP: [Internal Transfer API](docs/internal-transfer-api.md).
 
 Chạy unit test (không cần Docker):
 

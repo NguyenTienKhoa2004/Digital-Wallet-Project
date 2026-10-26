@@ -41,7 +41,7 @@ class FlowPayApplicationIT {
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'flowpay'",
 				Integer.class)).isEqualTo(1);
-		assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+		assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
 		assertThat(flyway.info().pending()).isEmpty();
 		assertThat(jdbcTemplate.queryForList(
 				"SELECT table_name FROM information_schema.tables WHERE table_schema = 'flowpay'",
