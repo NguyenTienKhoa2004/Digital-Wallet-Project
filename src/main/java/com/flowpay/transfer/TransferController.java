@@ -6,6 +6,7 @@ import com.flowpay.transfer.dto.TransferHistoryResponse;
 import com.flowpay.transfer.dto.TransferRequest;
 import com.flowpay.transfer.dto.TransferResponse;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/transfers")
+@SecurityRequirement(name = "bearerAuth")
 public class TransferController {
 
     private final TransferService transferService;

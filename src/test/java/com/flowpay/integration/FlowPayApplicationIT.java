@@ -5,9 +5,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
+import com.flowpay.payment.ProviderPayment;
 import com.flowpay.support.TestcontainersConfiguration;
+import jakarta.persistence.EntityManager;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +19,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,19 +39,50 @@ class FlowPayApplicationIT {
 	@Autowired
 	private Environment environment;
 
+	@Autowired
+	private EntityManager entityManager;
+
 	@Test
 	void databaseIsReachableAndMigrationsAreApplied() {
 		assertThat(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'flowpay'",
 				Integer.class)).isEqualTo(1);
-		assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
+		assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
 		assertThat(flyway.info().pending()).isEmpty();
 		assertThat(jdbcTemplate.queryForList(
 				"SELECT table_name FROM information_schema.tables WHERE table_schema = 'flowpay'",
 				String.class)).containsExactlyInAnyOrder("users", "wallets", "transactions",
 				"ledger_accounts", "ledger_entries", "provider_payments", "idempotency_requests",
 				"reconciliation_checks");
+	}
+
+	@Test
+	@Transactional
+	void providerPaymentPersistsAndCanBeLookedUpByItsIdWithoutSeparateRequestId() {
+		UUID userId = createUser();
+		UUID walletId = jdbcTemplate.queryForObject("""
+				INSERT INTO flowpay.wallets (user_id, currency, updated_at)
+				VALUES (?, 'USD', CURRENT_TIMESTAMP) RETURNING wallet_id
+				""", UUID.class, userId);
+		UUID transactionId = jdbcTemplate.queryForObject("""
+				INSERT INTO flowpay.transactions
+				(reference, initiated_by, destination_wallet_id, type, amount, currency, status, updated_at)
+				VALUES (?, ?, ?, 'TOP_UP', 100, 'USD', 'PENDING', CURRENT_TIMESTAMP)
+				RETURNING transaction_id
+				""", UUID.class, UUID.randomUUID().toString(), userId, walletId);
+		ProviderPayment payment = ProviderPayment.forMock(transactionId, Instant.now());
+		entityManager.persist(payment);
+		entityManager.flush();
+		UUID paymentId = payment.getId();
+		assertThat(paymentId).isNotNull();
+		entityManager.clear();
+		assertThat(entityManager.find(ProviderPayment.class, paymentId).getId()).isEqualTo(paymentId);
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = 'flowpay' AND table_name = 'provider_payments'
+				AND column_name = 'provider_request_id'
+				""", Integer.class)).isZero();
 	}
 
 	@Test

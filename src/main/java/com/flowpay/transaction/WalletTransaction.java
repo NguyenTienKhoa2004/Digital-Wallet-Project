@@ -95,6 +95,39 @@ public class WalletTransaction {
 		return transaction;
 	}
 
+	public static WalletTransaction pendingTopUp(
+        String reference,
+        UUID initiatedByUserId,
+        UUID destinationWalletId,
+        long amount,
+        String description,
+        Instant now) {
+
+		Objects.requireNonNull(reference, "reference must not be null");
+		Objects.requireNonNull(initiatedByUserId, "initiatedByUserId must not be null");
+		Objects.requireNonNull(destinationWalletId, "destinationWalletId must not be null");
+		Objects.requireNonNull(now, "now must not be null");
+
+		if (amount <= 0) {
+			throw new IllegalArgumentException("amount must be greater than zero");
+		}
+
+		WalletTransaction transaction = new WalletTransaction();
+		transaction.reference = reference;
+		transaction.initiatedByUserId = initiatedByUserId;
+		transaction.sourceWalletId = null;
+		transaction.destinationWalletId = destinationWalletId;
+		transaction.type = TransactionType.TOP_UP;
+		transaction.amount = amount;
+		transaction.currency = "USD";
+		transaction.status = TransactionStatus.PENDING;
+		transaction.description = description;
+		transaction.createdAt = now;
+		transaction.updatedAt = now;
+
+		return transaction;
+	}
+
 	public void markSuccess(Instant now) {
 		requirePending();
 		Objects.requireNonNull(now, "now must not be null");

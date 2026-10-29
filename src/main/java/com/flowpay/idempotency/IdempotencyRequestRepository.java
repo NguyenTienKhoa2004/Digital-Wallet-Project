@@ -34,4 +34,20 @@ public interface IdempotencyRequestRepository extends JpaRepository<IdempotencyR
 
     Optional<IdempotencyRequest> findByUserIdAndOperationTypeAndIdempotencyKey(
             UUID userId, IdempotencyOperation operationType, String idempotencyKey);
+
+    @Modifying
+        @Query(value = """
+                INSERT INTO flowpay.idempotency_requests
+                (user_id, operation_type, idempotency_key,
+                request_hash, status, created_at, updated_at)
+                VALUES (:userId, 'TOP_UP', :key, :hash,
+                        'PROCESSING', :now, :now)
+                ON CONFLICT (user_id, operation_type, idempotency_key)
+                DO NOTHING
+                """, nativeQuery = true)
+        int insertTopUpRequestIfAbsent(
+                @Param("userId") UUID userId,
+                @Param("key") String key,
+                @Param("hash") String hash,
+                @Param("now") Instant now);
 }

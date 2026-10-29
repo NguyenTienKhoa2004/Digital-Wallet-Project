@@ -1,0 +1,15 @@
+mock-provider:
+  api-key: ${MOCK_PROVIDER_API_KEY}
+  # Empty URLs resolve to this application's actual listening port.
+  base-url: ${PAYMENT_PROVIDER_BASE_URL:}
+  callback-base-url: ${FLOWPAY_CALLBACK_BASE_URL:}
+  callback-key: ${MOCK_PROVIDER_CALLBACK_KEY}
+  processing-delay-ms: 5000
+  processing-interval-ms: 1000
+  final-status: ${MOCK_PROVIDER_FINAL_STATUS:SUCCESS}
+
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 3

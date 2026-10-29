@@ -32,9 +32,13 @@ public class SecurityConfiguration {
 				.requestCache(cache -> cache.disable())
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login").permitAll()
+						.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/docs")
+						.permitAll()
 						.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/error")
 						.permitAll()
 						.requestMatchers("/admin/**").hasRole("ADMIN")
+						.requestMatchers("/payments", "/payments/**").permitAll()
+						.requestMatchers(HttpMethod.POST, "/provider-callbacks/mock").permitAll()
 						.anyRequest().authenticated())
 				.exceptionHandling(errors -> errors
 						.authenticationEntryPoint(securityErrors)

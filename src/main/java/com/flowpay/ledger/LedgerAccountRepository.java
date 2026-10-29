@@ -8,4 +8,6 @@ import java.util.Optional;
 
 public interface LedgerAccountRepository extends JpaRepository<LedgerAccount, UUID> {
     Optional<LedgerAccount> findByWalletId(UUID walletId);
+
+    Optional<LedgerAccount> findByAccountCode(String accountCode);
 }

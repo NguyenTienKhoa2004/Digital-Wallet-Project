@@ -5,10 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.flowpay.common.exception.ApiException;
-import com.flowpay.idempotency.IdempotencyOperation;
 import com.flowpay.idempotency.IdempotencyRequest;
-import com.flowpay.idempotency.IdempotencyRequestRepository;
-import com.flowpay.idempotency.IdempotencyStatus;
 import com.flowpay.ledger.EntryType;
 import com.flowpay.ledger.LedgerAccount;
 import com.flowpay.ledger.LedgerAccountRepository;
@@ -27,7 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class TransferExecutionService {
@@ -37,46 +33,35 @@ public class TransferExecutionService {
     private final WalletTransactionRepository transactionRepository;
     private final LedgerAccountRepository ledgerAccountRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
-    private final IdempotencyRequestRepository idempotencyRepository;
-    private final ObjectMapper objectMapper;
+    private final TransferIdempotencyService idempotencyService;
 
     public TransferExecutionService(UserRepository userRepository, WalletRepository walletRepository,
             WalletTransactionRepository transactionRepository, LedgerAccountRepository ledgerAccountRepository,
-            LedgerEntryRepository ledgerEntryRepository, IdempotencyRequestRepository idempotencyRepository,
-            ObjectMapper objectMapper) {
+            LedgerEntryRepository ledgerEntryRepository, TransferIdempotencyService idempotencyService) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerAccountRepository = ledgerAccountRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
-        this.idempotencyRepository = idempotencyRepository;
-        this.objectMapper = objectMapper;
+        this.idempotencyService = idempotencyService;
     }
 
-    // Own the transaction so cached business rejections commit before the facade raises an API error.
-    // READ_COMMITTED lets a duplicate INSERT wait, then read the first request's committed result.
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public StoredTransferResult execute(UUID userId, String key, String hash, TransferRequest transferRequest) {
         if (!userRepository.existsById(userId)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User does not exist.");
         }
-        boolean isNewRequest = idempotencyRepository
-                .insertTransferRequestIfAbsent(userId, key, hash, Instant.now()) == 1;
-        IdempotencyRequest operation = idempotencyRepository
-                .findForUpdate(userId, IdempotencyOperation.TRANSFER, key).orElseThrow();
-        if (!operation.getRequestHash().equals(hash)) {
-            throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT",
-                    "This Idempotency-Key was already used with a different request.");
-        }
-        if (!isNewRequest) {
-            return finalResult(operation);
+        TransferIdempotencyService.Claim claim = idempotencyService.begin(userId, key, hash);
+        IdempotencyRequest idempotencyRequest = claim.request();
+        if (!claim.isNew()) {
+            return StoredTransferResult.from(idempotencyRequest);
         }
 
         PreparedTransfer prepared;
         try {
             prepared = prepare(userId, transferRequest);
         } catch (ApiException rejection) {
-            return reject(operation, null, rejection);
+            return idempotencyService.reject(idempotencyRequest, null, rejection);
         }
 
         Instant now = Instant.now();
@@ -84,10 +69,10 @@ public class TransferExecutionService {
                 "TRF-" + UUID.randomUUID(), userId, prepared.source().getId(), prepared.destination().getId(),
                 transferRequest.amount(), transferRequest.description(), now));
         if (prepared.source().getBalance() < transferRequest.amount()) {
-            return fail(operation, transaction, "INSUFFICIENT_BALANCE", "Source wallet has insufficient balance.");
+            return fail(idempotencyRequest, transaction, "INSUFFICIENT_BALANCE", "Source wallet has insufficient balance.");
         }
         if (prepared.destination().getBalance() > Long.MAX_VALUE - transferRequest.amount()) {
-            return fail(operation, transaction, "BALANCE_LIMIT_EXCEEDED", "Destination wallet balance limit exceeded.");
+            return fail(idempotencyRequest, transaction, "BALANCE_LIMIT_EXCEEDED", "Destination wallet balance limit exceeded.");
         }
 
         prepared.source().debit(transferRequest.amount(), now);
@@ -98,26 +83,7 @@ public class TransferExecutionService {
                 LedgerEntry.create(transaction.getId(), prepared.destinationAccount().getId(),
                         EntryType.CREDIT, transferRequest.amount(), now)));
         transaction.markSuccess(Instant.now());
-        operation.complete(transaction.getId(), objectMapper.writeValueAsString(TransferResponse.from(transaction)), Instant.now());
-        idempotencyRepository.flush();
-        return StoredTransferResult.from(operation);
-    }
-
-    @Transactional(readOnly = true)
-    public StoredTransferResult findResult(UUID userId, String key) {
-        IdempotencyRequest operation = idempotencyRepository
-                .findByUserIdAndOperationTypeAndIdempotencyKey(userId, IdempotencyOperation.TRANSFER, key)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "OPERATION_NOT_FOUND",
-                        "No committed result was found. This does not prove failure; retry with the same Idempotency-Key."));
-        return finalResult(operation);
-    }
-
-    private StoredTransferResult finalResult(IdempotencyRequest operation) {
-        if (operation.getStatus() == IdempotencyStatus.PROCESSING) {
-            throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_IN_PROGRESS",
-                    "The outcome is not final. Look up the result again or retry with the same Idempotency-Key.");
-        }
-        return StoredTransferResult.from(operation);
+        return idempotencyService.complete(idempotencyRequest, transaction.getId(), TransferResponse.from(transaction));
     }
 
     private PreparedTransfer prepare(UUID userId, TransferRequest input) {
@@ -159,17 +125,11 @@ public class TransferExecutionService {
                 new IllegalStateException("Ledger account is missing for wallet: " + walletId));
     }
 
-    private StoredTransferResult fail(IdempotencyRequest operation, WalletTransaction transaction, String code, String detail) {
+    private StoredTransferResult fail(IdempotencyRequest idempotencyRequest, WalletTransaction transaction,
+            String code, String detail) {
         transaction.markFailed(code, Instant.now());
-        return reject(operation, transaction.getId(),
+        return idempotencyService.reject(idempotencyRequest, transaction.getId(),
                 new ApiException(HttpStatus.CONFLICT, code, detail, transaction.getReference()));
-    }
-
-    private StoredTransferResult reject(IdempotencyRequest operation, UUID transactionId, ApiException error) {
-        operation.reject(transactionId, (short) error.getStatus().value(),
-                objectMapper.writeValueAsString(error.toProblemDetail()), Instant.now());
-        idempotencyRepository.flush();
-        return StoredTransferResult.from(operation);
     }
 
     private record PreparedTransfer(Wallet source, Wallet destination,

@@ -17,12 +17,14 @@ import tools.jackson.databind.ObjectMapper;
 public class TransferService {
 
     private final TransferExecutionService executionService;
+    private final TransferIdempotencyService idempotencyService;
     private final TransferRequestFingerprint fingerprint;
     private final ObjectMapper objectMapper;
 
-    public TransferService(TransferExecutionService executionService,
+    public TransferService(TransferExecutionService executionService, TransferIdempotencyService idempotencyService,
             TransferRequestFingerprint fingerprint, ObjectMapper objectMapper) {
         this.executionService = executionService;
+        this.idempotencyService = idempotencyService;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
     }
@@ -47,7 +49,7 @@ public class TransferService {
 
     public TransferResponse findByIdempotencyKey(UUID userId, String key) {
         validateKey(key);
-        return decode(executionService.findResult(userId, key));
+        return decode(idempotencyService.findResult(userId, key));
     }
 
     private TransferResponse decode(StoredTransferResult result) {
