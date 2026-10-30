@@ -1,194 +1,185 @@
 # FlowPay Backend
 
-Backend cho ví điện tử FlowPay. Đã có đăng ký/đăng nhập JWT, tạo ví và chuyển tiền nội bộ với idempotency, double-entry ledger, lịch sử và tra cứu kết quả. Chưa triển khai nạp tiền hoặc đối soát.
+## Project Overview
 
-Xem [Tổng quan kỹ thuật](FlowPayTechnicalOverview.md) để hiểu cấu trúc thư mục, kiến trúc đề xuất, luồng khởi động và cách làm việc với database.
+FlowPay is a digital wallet backend for managing USD balances, transferring money between users, and maintaining an auditable financial history. It addresses common payment challenges: concurrent balance updates, duplicate requests after network timeouts, and partial writes that could leave balances and accounting records inconsistent.
 
-## Stack
+The goal is to make money movement atomic, safe to retry, and traceable. Users can register, authenticate, create a wallet, fund it through the simulated provider, transfer money, and retrieve transaction results and history.
 
-- Java 21, Spring Boot 4.1.1, Maven Wrapper.
-- Spring MVC, Bean Validation, Spring Data JPA / Hibernate.
-- Spring Security, JWT Bearer token (HS256), mật khẩu băm BCrypt.
-- PostgreSQL 17, Flyway.
-- Spring Boot Actuator.
-- JUnit, AssertJ, Testcontainers.
+## Key Features
 
-## Điều kiện chạy
+- **Stateless authentication:** BCrypt password hashing and HS256 JWT access tokens, with signature, issuer, audience, time, subject, and role validation. Wallet ownership comes from the verified token.
+- **Wallet management:** one USD wallet per user, created with a zero balance and a corresponding liability ledger account in one database transaction.
+- **Atomic internal transfers:** balance changes, transaction state, two ledger entries, and the idempotency result commit together within a single database transaction.
+- **Concurrency control:** pessimistic wallet locks protect balances during competing transfers. Locks are acquired in a consistent UUID order to reduce the risk of deadlocks. Balance and overflow checks prevent overdrafts and invalid credits.
+- **Persistent idempotency:** PostgreSQL uniqueness constraints, row locks, SHA-256 request fingerprints, and stored responses prevent duplicate execution. If client reuse a key with different business fields returns `409 IDEMPOTENCY_KEY_CONFLICT`.
+- **Double-entry accounting:** each successful transfer debits the sender's liability account and credits the recipient's liability account by the same amount. The system does not allow updates or deletions of ledger entries.
+- **Transfer queries:** lookup by reference or idempotency key, plus paginated history. Senders can see their failed transfers; recipients can see successful incoming transfers.
+- **Asynchronous top-ups:** durable payment dispatch, HTTP provider integration, authenticated callbacks, and polling recovery. Confirmed payments credit wallets exactly once with balanced ledger entries. See [Top-up API and recovery](docs/top-up-api.md).
+- **API tooling and verification:** OpenAPI/Swagger UI, structured Problem Detail errors, Actuator health checks, and PostgreSQL integration tests through Testcontainers.
 
-- JDK 21: `java -version` và `javac -version`.
-- Docker Desktop đang chạy: `docker version` có cả Client và Server.
-- Có kết nối Internet cho lần tải Maven, dependencies và Docker image đầu tiên.
-- Cổng 5432 và 8080 đang trống, hoặc đổi cấu hình như bên dưới.
 
-Không cần cài Maven hay PostgreSQL trực tiếp trên máy.
+## System Architecture
 
-## Chạy local
+FlowPay is a **modular monolith**: a single Spring Boot application organized by business capability, backed by PostgreSQL.
 
-Tại thư mục project:
+![FlowPay high-level architecture: REST API, business modules, payment background jobs, mock provider, and PostgreSQL](docs/images/high-level-architecture.png)
 
-```bash
-export JWT_SECRET="$(openssl rand -base64 32)"
-docker compose up -d --wait postgres
-./mvnw spring-boot:run
+- **API and security:** REST controllers expose user and admin endpoints. Spring Security authenticates and authorizes requests; Bean Validation checks request payloads.
+- **Business modules:** auth, wallet, transfer, top-up, transaction, ledger, and payment services enforce business rules. Internal transfers commit balance changes, ledger entries, transaction state, and idempotency results in one database transaction.
+- **Persistence:** JPA repositories store business data in the `flowpay` schema. Flyway manages schema migrations, and the mock provider uses Spring JDBC with a separate `mock_provider` schema in the same PostgreSQL database.
+- **Payment processing:** background jobs dispatch pending payments and recover uncertain outcomes through retries and polling. Provider callbacks and polling share the same settlement service to credit confirmed top-ups exactly once.
+
+The diagram shows the mock provider as a separate integration boundary. In the local simulation, it runs inside the same application under the `mock-provider` profile and communicates with the payment module over HTTP.
+
+Registration and login are public endpoints; wallet, transfer, and top-up endpoints require a bearer token. The `mock-provider` profile enables the simulated provider, HTTP adapter, payment worker, and callback delivery. Provider requests use `X-Provider-Key`; callbacks use a separate `X-Callback-Key`. Their controllers verify these keys independently of user JWTs.
+
+
+
+## Database Design
+
+PostgreSQL contains eight business tables in the `flowpay` schema and a separate `mock_provider.payments` table. Flyway stores migration history in `public.flyway_schema_history`. The [SQL migrations](src/main/resources/db/migration) define the authoritative schema.
+
+### Entity Relationship Diagram
+
+The diagram shows the business tables and selected columns. Optional relationships reflect nullable foreign keys or unique constraints. Stronger guarantees, such as creating a wallet and its ledger account together, are enforced by services.
+
+```mermaid
+erDiagram
+    users ||--o| wallets : owns
+    users ||--o{ transactions : initiates
+    users ||--o{ idempotency_requests : submits
+    wallets o|--o{ transactions : source
+    wallets ||--o{ transactions : destination
+    wallets o|--o| ledger_accounts : backs
+    transactions ||--o{ ledger_entries : posts
+    ledger_accounts ||--o{ ledger_entries : records
+    transactions ||--o| provider_payments : tracks
+    transactions o|--o| idempotency_requests : identifies
+    provider_payments ||--o{ reconciliation_checks : has
+
+    users {
+        uuid user_id PK
+        varchar username
+        varchar email UK
+        varchar password_hash "nullable for legacy users"
+        varchar role "USER or ADMIN"
+    }
+    wallets {
+        uuid wallet_id PK
+        uuid user_id FK,UK
+        bigint balance "USD cents"
+        varchar currency "USD"
+        varchar status "ACTIVE or FROZEN"
+    }
+    transactions {
+        uuid transaction_id PK
+        varchar reference UK
+        uuid initiated_by FK
+        uuid source_wallet_id FK "nullable for top-ups"
+        uuid destination_wallet_id FK
+        varchar type "TRANSFER or TOP_UP"
+        bigint amount
+        varchar status "PENDING, SUCCESS, FAILED"
+        varchar failure_code
+        timestamptz completed_at
+    }
+    ledger_accounts {
+        uuid account_id PK
+        varchar account_code UK
+        uuid wallet_id FK,UK "nullable for provider clearing"
+        varchar purpose "WALLET or PROVIDER_CLEARING"
+        varchar accounting_type "LIABILITY or ASSET"
+    }
+    ledger_entries {
+        uuid entry_id PK
+        uuid transaction_id FK
+        uuid account_id FK
+        varchar entry_type "DEBIT or CREDIT"
+        bigint amount
+    }
+    provider_payments {
+        uuid payment_id PK
+        uuid transaction_id FK,UK
+        varchar provider
+        varchar provider_payment_id
+        varchar provider_status "UNKNOWN, PENDING, SUCCESS, FAILED"
+        integer attempt_count
+        timestamptz next_check_at
+    }
+    idempotency_requests {
+        uuid id PK
+        uuid user_id FK
+        uuid transaction_id FK,UK "nullable"
+        varchar operation_type
+        varchar idempotency_key
+        varchar request_hash "SHA-256"
+        varchar status "PROCESSING, COMPLETED, REJECTED"
+        smallint response_status
+        jsonb response_body
+    }
+    reconciliation_checks {
+        uuid check_id PK
+        uuid payment_id FK
+        varchar previous_transaction_status
+        varchar observed_provider_status
+        varchar result "MATCHED, RESOLVED, RETRY, MANUAL_REVIEW"
+        timestamptz checked_at
+    }
 ```
 
-`JWT_SECRET` là khóa ký dạng Base64, giải mã thành ít nhất 32 byte ngẫu nhiên. Tạo một lần và giữ ổn định trong môi trường chạy; đổi khóa sẽ làm token cũ không còn hợp lệ. Không commit khóa vào source code. Không còn profile hoặc tài khoản demo tự tạo.
+### Relationships and Integrity Rules
 
-Giữ terminal chạy ứng dụng; mở terminal khác để kiểm tra:
-
-```bash
-curl http://localhost:8080/actuator/health
-```
-
-Kết quả có `status` là `UP` (có thể kèm các trường khác):
-
-```json
-{"groups":["liveness","readiness"],"status":"UP"}
-```
-
-Ứng dụng cần PostgreSQL đang chạy. Flyway tự áp dụng migration trước khi Hibernate khởi tạo; `ddl-auto: validate` không tự tạo/sửa bảng từ entity.
-
-## Database local
-
-| Thuộc tính | Mặc định |
+| Relationship or rule | Enforcement |
 |---|---|
-| Host | `localhost` |
-| Port | `5432` |
-| Database | `flowpay` |
-| Username | `flowpay` |
-| Password | `flowpay_local` |
-| Schema nghiệp vụ | `flowpay` |
-| Flyway history | `public.flyway_schema_history` |
+| User to wallet | `wallets.user_id` is a foreign key and unique: a user can have at most one wallet. |
+| Wallet to ledger account | `ledger_accounts.wallet_id` is unique when present. Wallet accounts are liabilities; provider-clearing accounts have no wallet and are assets. |
+| Transaction to wallets | Transfers require two distinct wallets. Top-ups require a destination wallet and a null source. |
+| Transaction to ledger entries | Each entry references a transaction and an account. `(transaction_id, account_id, entry_type)` is unique. Successful transfers create two equal postings in the service transaction. |
+| Transaction to provider payment | `provider_payments.transaction_id` is unique. External payment IDs are unique within each provider. |
+| Request to transaction | A request may reference one transaction; a transaction can belong to at most one idempotency request. Pre-transaction rejections may have no transaction. |
+| Provider payment to reconciliation checks | One payment can have many historical observations, recovery results, or manual-review conditions. |
 
-Đây là credential dành cho môi trường local. Compose chỉ publish PostgreSQL trên `127.0.0.1`.
+Additional safeguards:
 
-Mở PostgreSQL CLI trong container:
+- `BIGINT` amounts must be positive; wallet balances must be nonnegative. Currency is constrained to `USD`.
+- Foreign keys use `ON DELETE RESTRICT` to preserve referenced financial records.
+- Transaction status and `completed_at` must agree: pending transactions have no completion timestamp; final transactions require one.
+- Final idempotency records require an HTTP status and JSONB response. Completed requests also require a transaction reference.
+- Emails are unique and lowercase. Legacy users without a password hash cannot log in.
+- Ledger entries reject `UPDATE` and `DELETE` through the V4 trigger. Future corrections should use compensating transactions.
+- Timestamps use `timestamptz`; the application supplies and maintains `updated_at` columns.
 
-```bash
-docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-```
+Balanced postings and coordinated balance changes are enforced by service transactions, rather than a database constraint spanning multiple rows.
 
-Migration `V1` tạo schema `flowpay`; `V2__create_business_tables.sql` tạo 7 bảng P0 và bảng lịch sử đối soát P1 theo [ERD](FlowPayERD.md), cùng FK, UNIQUE, CHECK và index. `V3__add_user_password_hash.sql` bổ sung mật khẩu đã băm. `V4__protect_ledger_entries.sql` chặn UPDATE/DELETE trên ledger entries bằng trigger. User cũ không có password hash không thể đăng nhập; không gán mật khẩu mặc định cho các user này. Không sửa migration đã áp dụng; tạo phiên bản mới.
+### Indexing Strategy
 
-Các cột `updated_at` phải được application truyền khi insert và cập nhật khi sửa dữ liệu. Chuyển tiền ghi số dư, transaction, ledger và idempotency trong cùng database transaction, khóa hai ví theo thứ tự ID cố định. Ledger entries chỉ được thêm; điều chỉnh sau này phải qua giao dịch bù. User local của Compose là owner; production vẫn cần role database giới hạn quyền, không được phép vô hiệu hóa trigger.
+Primary keys and unique constraints create indexes for ID lookups and duplicate prevention. Key unique indexes cover email, wallet ownership, transaction reference, ledger account code and wallet, provider external payment identity, ledger posting identity, and the idempotency scope.
 
-## Test và build
+The schema also defines these query indexes:
 
-API chuyển tiền, quy tắc retry/timeout và các quyết định MVP: [Internal Transfer API](docs/internal-transfer-api.md).
-
-Chạy unit test (không cần Docker):
-
-```bash
-./mvnw test
-```
-
-Chạy unit test, integration test và đóng gói:
-
-```bash
-./mvnw verify
-```
-
-Unit test đặt trong `unit/`, có tên `*Test.java` và chạy bằng Maven Surefire. Integration test đặt trong `integration/`, có tên `*IT.java` và chạy bằng Maven Failsafe ở bước `integration-test`/`verify`. Cấu hình và launcher dùng chung đặt trong `support/`.
-
-Integration test dùng Testcontainers tự tạo PostgreSQL riêng, chạy migration và kiểm tra API qua HTTP. Không dùng hoặc sửa dữ liệu database local của Compose. Docker Desktop phải đang chạy khi chạy integration test, kể cả khi không khởi động Compose.
-
-Chỉ chạy integration test:
-
-```bash
-./mvnw test-compile failsafe:integration-test failsafe:verify
-```
-
-Nếu Testcontainers không tìm được Docker trên macOS, chạy:
-
-```bash
-export DOCKER_HOST="$(docker context inspect --format '{{.Endpoints.docker.Host}}')"
-./mvnw verify
-```
-
-Sau build, có thể chạy file JAR thay cho Maven:
-
-```bash
-java -jar target/flowpay-0.0.1-SNAPSHOT.jar
-```
-
-## Cấu hình qua environment variables
-
-| Biến | Mặc định | Dùng bởi |
+| Index | Columns | Purpose |
 |---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/flowpay` | Spring Boot |
-| `DB_USERNAME` | `flowpay` | Spring Boot và Compose |
-| `DB_PASSWORD` | `flowpay_local` | Spring Boot và Compose |
-| `DB_PORT` | `5432` | Compose, cổng host |
-| `SERVER_PORT` | `8080` | Spring Boot |
-| `JWT_SECRET` | Bắt buộc, không có mặc định | Khóa ký/xác minh JWT, Base64 của ít nhất 32 byte |
-| `JWT_ISSUER` | `flowpay` | Issuer của JWT |
-| `JWT_AUDIENCE` | `flowpay-api` | Audience của JWT |
-| `JWT_ACCESS_TOKEN_TTL_SECONDS` | `900` | Thời hạn access token theo giây, cho phép 60–86400 |
+| `idx_transactions_source_history` | `(source_wallet_id, created_at DESC, transaction_id DESC)` | Outgoing wallet history |
+| `idx_transactions_destination_history` | `(destination_wallet_id, created_at DESC, transaction_id DESC)` | Incoming wallet history |
+| `idx_transactions_initiator_history` | `(initiated_by, created_at DESC)` | Initiator history, including failed transfers |
+| `idx_ledger_entries_account_history` | `(account_id, created_at, entry_id)` | Account posting history with a stable ordering key |
+| `idx_provider_payments_next_check` | `(next_check_at) WHERE next_check_at IS NOT NULL` | Durable dispatch and polling recovery |
+| `idx_reconciliation_checks_payment_history` | `(payment_id, checked_at DESC)` | Latest reconciliation checks for a payment |
 
-Nếu cổng 5432 đã được dùng:
+`mock_provider.payments` stores a payment UUID, unique provider payment ID, amount, currency, status, timestamps, and durable callback delivery state. It has no foreign key to the business schema; its payment UUID matches `flowpay.provider_payments.payment_id`. The mock components require the `mock-provider` profile. A seeded provider-clearing asset account balances wallet top-ups.
 
-```bash
-DB_PORT=5433 docker compose up -d --wait postgres
-DB_URL=jdbc:postgresql://localhost:5433/flowpay ./mvnw spring-boot:run
-```
+### Schema Migrations
 
-Spring Boot không tự đọc file `.env`; nếu thay credential cho Compose bằng file `.env`, cần export cùng các biến cho tiến trình Java. Credential PostgreSQL chỉ được khởi tạo khi volume còn trống; thay biến môi trường không tự đổi password trong volume đã có dữ liệu.
+| Version | Change |
+|---|---|
+| V1 | Create the `flowpay` schema |
+| V2 | Create the eight business tables, constraints, and query indexes |
+| V3 | Add `users.password_hash` |
+| V4 | Protect ledger entries with an append-only trigger |
+| V5 | Remove `provider_request_id`; use `payment_id` as the provider request reference |
+| V6 | Create the `mock_provider` schema and payments table |
+| V7 | Seed the provider-clearing account and add durable callback delivery state |
 
-## Dừng
+Flyway runs migrations before Hibernate validates the entities (`ddl-auto: validate`). Add a new migration for schema changes instead of editing one already applied.
 
-- Ứng dụng: `Ctrl+C` tại terminal đang chạy.
-- Database: `docker compose down` — giữ dữ liệu trong named volume.
-
-## Cấu trúc
-
-```text
-src/main/java/com/flowpay/          # Application và các module nghiệp vụ về sau
-src/main/resources/application.yaml
-src/main/resources/db/migration/  # Flyway SQL migrations
-src/test/java/com/flowpay/unit/        # Unit tests (*Test.java), chia theo module
-src/test/java/com/flowpay/integration/ # Integration tests (*IT.java), chia theo module
-src/test/java/com/flowpay/support/     # PostgreSQL Testcontainer và launcher cho test
-compose.yaml                      # PostgreSQL local
-pom.xml                           # Dependencies và build
-mvnw                              # Maven Wrapper cho macOS/Linux
-FlowPayPRD.md                      # Yêu cầu nghiệp vụ
-FlowPayERD.md                      # Thiết kế dữ liệu
-```
-
-## Đăng ký, đăng nhập và tạo ví
-
-| Method | Endpoint | Kết quả |
-|---|---|---|
-| `POST` | `/auth/register` | `201`: tạo user, chưa tự tạo ví |
-| `POST` | `/auth/login` | `200`: trả `accessToken`, `tokenType`, `expiresIn` và thông tin user |
-| `POST` | `/wallets` | `201`: tạo ví 0 USD, ACTIVE cùng ledger account cho user trong JWT |
-
-Body đăng ký:
-
-```json
-{
-  "username": "Johnny",
-  "email": "johnny@example.com",
-  "password": "choose-a-strong-password"
-}
-```
-
-Body đăng nhập:
-
-```json
-{
-  "email": "johnny@example.com",
-  "password": "choose-a-strong-password"
-}
-```
-
-Sau đăng nhập, gửi header `Authorization: Bearer <accessToken>` khi gọi `POST /wallets` (không cần body). Backend lấy user ID từ claim `sub` của token đã xác minh. HTTP Basic đã bị bỏ.
-
-- Email được chuẩn hóa chữ thường, đăng ký trùng trả `409 EMAIL_ALREADY_EXISTS`.
-- Password đăng ký tối thiểu 8 ký tự và tối đa 72 byte UTF-8; chỉ lưu hash BCrypt, không trả password/hash trong response.
-- User mới luôn có role `USER`; client không được tự chọn role `ADMIN`.
-- Đăng nhập sai trả `401 INVALID_CREDENTIALS`; token thiếu/sai/hết hạn trả `401`; không đủ quyền trả `403`.
-- JWT kiểm tra chữ ký HS256, issuer, audience, thời hạn và UUID subject. Access token mặc định có thời hạn 15 phút; bộ kiểm tra thời gian của Spring Security có clock skew mặc định.
-- Hiện chỉ có access token, chưa có refresh token hoặc cơ chế thu hồi từng token. Khi hết hạn cần đăng nhập lại. Dùng HTTPS khi triển khai.
-
-Tổ chức code: `auth/` xử lý đăng ký/đăng nhập và cấp token; `user/` lưu user; `wallet/` xử lý ví; `ledger/` tạo account; `common/config/` cấu hình JWT và bảo mật; `common/exception/` trả lỗi API.
