@@ -38,6 +38,10 @@ build/
 !.env.example
 .DS_Store
 *.log
+node_modules/
+/frontend/dist/
+/frontend/coverage/
+*.tsbuildinfo
 
 ### Local documentation ###
 /FlowPayERD.md
@@ -47,3 +51,18 @@ build/
 /InternalTransfer.md
 /internal-transfer-api.md
 /COMMANDS.md
+
+### Terraform ###
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+backend.hcl
+
+# Keep examples and provider lockfiles in Git
+!*.example
+!.terraform.lock.hcl
