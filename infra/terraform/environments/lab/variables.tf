@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "AWS region dùng cho hạ tầng FlowPay lab."
+  description = "AWS region used for the FlowPay lab infrastructure."
   type        = string
   default     = "ap-southeast-1"
 
@@ -10,7 +10,7 @@ variable "aws_region" {
 }
 
 variable "environment" {
-  description = "Tên môi trường; root configuration này chỉ dành cho lab."
+  description = "Environment name; this root configuration is intended for the lab environment only."
   type        = string
   default     = "lab"
 
@@ -21,7 +21,7 @@ variable "environment" {
 }
 
 variable "vpc_cidr" {
-  description = "IPv4 CIDR của VPC; kiểm tra không trùng mạng local hoặc VPN trước khi triển khai."
+  description = "IPv4 CIDR block for the VPC; verify that it does not overlap with local or VPN networks before deployment."
   type        = string
   default     = "10.20.0.0/16"
 
@@ -38,7 +38,7 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnet_cidr" {
-  description = "IPv4 CIDR của public subnet, nằm trong VPC và có prefix dài hơn VPC."
+  description = "IPv4 CIDR block for the public subnet, contained within the VPC and with a longer prefix than the VPC CIDR block."
   type        = string
   default     = "10.20.1.0/24"
 
@@ -56,7 +56,7 @@ variable "public_subnet_cidr" {
 }
 
 variable "instance_type" {
-  description = "Loại EC2 ARM64 cho lab; giới hạn lựa chọn ban đầu để kiểm soát cấu hình và chi phí."
+  description = "ARM64 EC2 instance type for the lab; initial choices are limited to control configuration and costs."
   type        = string
   default     = "t4g.small"
 
@@ -67,7 +67,7 @@ variable "instance_type" {
 }
 
 variable "tags" {
-  description = "Tags bổ sung, bắt buộc có Owner; Project, Environment và ManagedBy được chốt trong locals.tf."
+  description = "Additional tags, including the required Owner tag; Project, Environment, and ManagedBy are fixed in locals.tf."
   type        = map(string)
   default = {
     Owner = "johnny"
