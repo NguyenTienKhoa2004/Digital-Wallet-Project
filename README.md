@@ -183,3 +183,20 @@ The schema also defines these query indexes:
 
 Flyway runs migrations before Hibernate validates the entities (`ddl-auto: validate`). Add a new migration for schema changes instead of editing one already applied.
 
+## Screenshots
+
+### Sign In
+
+![FlowPay sign-in screen](docs/images/signin.png)
+
+### Sign Up
+
+![FlowPay sign-up screen](docs/images/signup.png)
+
+### Wallet Dashboard
+
+![FlowPay wallet dashboard](docs/images/mainpage.png)
+
+### Transactions
+
+![FlowPay transactions screen](docs/images/transaction.png)
