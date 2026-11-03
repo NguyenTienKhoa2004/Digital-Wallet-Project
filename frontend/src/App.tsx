@@ -12,24 +12,25 @@ type Session = LoginResult & { expiresAt: number }
 type AuthFields = Credentials & { username?: string; confirmPassword?: string }
 
 function Showcase() {
-  return <aside className="showcase" aria-label="Giới thiệu FlowPay">
+  return <aside className="showcase" aria-label="About FlowPay">
     <div className="showcase-grid" aria-hidden="true" />
+    <header className="showcase-brand"><Brand /></header>
     <div className="showcase-content">
-      <span className="eyebrow"><span /> CHUYỂN ĐỘNG CÙNG BẠN</span>
-      <h1>Dòng tiền thông suốt.<br /><span>Cuộc sống thảnh thơi.</span></h1>
-      <p>Một nơi cho ví của bạn. Chuyển tiền, nạp tiền và theo dõi giao dịch thật dễ dàng.</p>
+      <span className="eyebrow"><span /> MOVING WITH YOU</span>
+      <h1>Money in flow.<br /><span>Life at ease.</span></h1>
+      <p>One place for your wallet. Send money, add funds, and track transactions with ease.</p>
       <div className="flow-art" aria-hidden="true">
         <div className="orbit orbit-one" /><div className="orbit orbit-two" />
-        <div className="floating-label label-top"><span className="mini-icon">↗</span> Chuyển tiền dễ dàng <CheckCircleFilled /></div>
+        <div className="floating-label label-top"><span className="mini-icon">↗</span> Easy transfers <CheckCircleFilled /></div>
         <div className="wallet-card">
           <div className="wallet-top"><span>flowpay.</span><span className="card-chip"><i /><i /><i /></span></div>
-          <span className="wallet-caption">MỌI KẾT NỐI. MỘT CHẠM.</span>
+          <span className="wallet-caption">EVERY CONNECTION. ONE TAP.</span>
           <div className="wallet-symbol">f<span>↗</span></div>
           <div className="wallet-bottom"><span>YOUR EVERYDAY WALLET</span><span>••••</span></div>
         </div>
-        <div className="floating-label label-bottom"><span className="mini-icon"><CheckOutlined /></span><div>Luôn trong tầm tay<small>Theo dõi từng giao dịch</small></div></div>
+        <div className="floating-label label-bottom"><span className="mini-icon"><CheckOutlined /></span><div>Always within reach<small>Track every transaction</small></div></div>
       </div>
-      <div className="showcase-benefits"><span><CheckOutlined /> Thao tác đơn giản</span><span><CheckOutlined /> Giao dịch minh bạch</span></div>
+      <div className="showcase-benefits"><span><CheckOutlined /> Simple to use</span><span><CheckOutlined /> Clear transactions</span></div>
     </div>
     <div className="showcase-footer"><span>YOUR MONEY, IN FLOW.</span><span className="footer-line" /></div>
   </aside>
@@ -48,7 +49,7 @@ function AuthPage({ onLogin }: { onLogin: (result: LoginResult) => void }) {
 
   useEffect(() => {
     mounted.current = true
-    document.title = `FlowPay · ${isRegister ? 'Đăng ký' : 'Đăng nhập'}`
+    document.title = `FlowPay · ${isRegister ? 'Sign up' : 'Sign in'}`
     return () => { mounted.current = false }
   }, [isRegister])
 
@@ -71,9 +72,9 @@ function AuthPage({ onLogin }: { onLogin: (result: LoginResult) => void }) {
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Đã xảy ra lỗi. Vui lòng thử lại.')
+        setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.')
         if (cause instanceof ApiError && cause.code === 'EMAIL_ALREADY_EXISTS') {
-          form.setFields([{ name: 'email', errors: ['Email này đã được đăng ký.'] }])
+          form.setFields([{ name: 'email', errors: ['This email is already registered.'] }])
         }
       }
     } finally {
@@ -85,48 +86,54 @@ function AuthPage({ onLogin }: { onLogin: (result: LoginResult) => void }) {
   return <div className="auth-layout">
     <Showcase />
     <section className="auth-side">
-      <header className="auth-top"><Brand /><div className="auth-header-actions"><span className="top-caption">Ví điện tử, thật đơn giản.</span><ThemeToggle /></div></header>
+      <header className="auth-top">
+        <div className="auth-mobile-brand"><Brand /></div>
+        <div className="auth-header-actions">
+          <span className="top-caption">Your wallet, made simple.</span>
+          <ThemeToggle />
+        </div>
+      </header>
       <main className="form-container">
-        <div className="step-label"><span /> {isRegister ? 'BẮT ĐẦU HÀNH TRÌNH' : 'CHÀO MỪNG TRỞ LẠI'}</div>
-        <h2>{isRegister ? 'Tạo tài khoản' : 'Đăng nhập vào FlowPay'}</h2>
-        <p className="form-description">{isRegister ? 'Một bước nhỏ để quản lý dòng tiền dễ dàng hơn.' : 'Tiếp tục hành trình tài chính của bạn.'}</p>
-        <nav className="auth-switch" aria-label="Chọn đăng nhập hoặc đăng ký">
-          <Link aria-current={!isRegister ? 'page' : undefined} to="/login">Đăng nhập</Link>
-          <Link aria-current={isRegister ? 'page' : undefined} to="/register">Đăng ký</Link>
+        <div className="step-label"><span /> {isRegister ? 'START YOUR JOURNEY' : 'WELCOME BACK'}</div>
+        <h2>{isRegister ? 'Create account' : 'Sign in to FlowPay'}</h2>
+        <p className="form-description">{isRegister ? 'One small step toward easier money management.' : 'Continue your financial journey.'}</p>
+        <nav className="auth-switch" aria-label="Sign in or create an account">
+          <Link aria-current={!isRegister ? 'page' : undefined} to="/login">Sign in</Link>
+          <Link aria-current={isRegister ? 'page' : undefined} to="/register">Sign up</Link>
         </nav>
-        {success && <Alert className="form-alert" type="success" showIcon title="Tạo tài khoản thành công!" description="Đăng nhập để bắt đầu sử dụng FlowPay." />}
-        {location.state?.expired && <Alert className="form-alert" type="info" showIcon title="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." />}
+        {success && <Alert className="form-alert" type="success" showIcon title="Account created successfully!" description="Sign in to get started with FlowPay." />}
+        {location.state?.expired && <Alert className="form-alert" type="info" showIcon title="Your session has expired. Please sign in again." />}
         {error && <div role="alert"><Alert className="form-alert" type="error" showIcon title={error} /></div>}
-        <Form<AuthFields> form={form} layout="vertical" size="large" onFinish={submit} disabled={pending}
+        <Form<AuthFields> className="auth-form" form={form} layout="vertical" variant="underlined" size="large" onFinish={submit} disabled={pending}
           initialValues={{ email: location.state?.email || '' }} requiredMark={false} autoComplete="on">
-          {isRegister && <Form.Item name="username" label="Tên hiển thị" rules={[
-            { required: true, whitespace: true, message: 'Vui lòng nhập tên hiển thị.' },
-            { max: 255, message: 'Tên hiển thị tối đa 255 ký tự.' },
-          ]}><Input prefix={<UserOutlined />} placeholder="Tên của bạn" autoComplete="nickname" maxLength={255} /></Form.Item>}
+          {isRegister && <Form.Item name="username" label="Display name" rules={[
+            { required: true, whitespace: true, message: 'Please enter your display name.' },
+            { max: 255, message: 'Display name must be 255 characters or fewer.' },
+          ]}><Input prefix={<UserOutlined />} placeholder="Display name" autoComplete="nickname" maxLength={255} /></Form.Item>}
           <Form.Item name="email" label="Email" rules={[
-            { required: true, whitespace: true, message: 'Vui lòng nhập email.' },
-            { type: 'email', transform: (value: string) => value.trim(), message: 'Vui lòng nhập email hợp lệ.' },
-            { max: 320, message: 'Email tối đa 320 ký tự.' },
-          ]}><Input prefix={<MailOutlined />} placeholder="ban@example.com" autoComplete="email" inputMode="email" maxLength={320} autoCapitalize="none" spellCheck={false} /></Form.Item>
-          <Form.Item name="password" label="Mật khẩu" extra={isRegister ? 'Ít nhất 8 ký tự, tối đa 72 byte UTF-8.' : undefined} rules={[
-            { required: true, whitespace: true, message: 'Vui lòng nhập mật khẩu.' },
-            ...(isRegister ? [{ min: 8, message: 'Mật khẩu cần ít nhất 8 ký tự.' }] : []),
+            { required: true, whitespace: true, message: 'Please enter your email address.' },
+            { type: 'email', transform: (value: string) => value.trim(), message: 'Please enter a valid email address.' },
+            { max: 320, message: 'Email must be 320 characters or fewer.' },
+          ]}><Input prefix={<MailOutlined />} placeholder="you@example.com" autoComplete="email" inputMode="email" maxLength={320} autoCapitalize="none" spellCheck={false} /></Form.Item>
+          <Form.Item name="password" label="Password" extra={isRegister ? 'At least 8 characters, up to 72 UTF-8 bytes.' : undefined} rules={[
+            { required: true, whitespace: true, message: 'Please enter your password.' },
+            ...(isRegister ? [{ min: 8, message: 'Password must be at least 8 characters.' }] : []),
             { validator: (_, value: string) => !value || new TextEncoder().encode(value).length <= 72
-              ? Promise.resolve() : Promise.reject(new Error('Mật khẩu vượt quá 72 byte UTF-8. Vui lòng rút ngắn.')) },
-          ]}><Input.Password prefix={<LockOutlined />} placeholder={isRegister ? 'Tạo mật khẩu của bạn' : 'Nhập mật khẩu của bạn'} autoComplete={isRegister ? 'new-password' : 'current-password'} maxLength={72} /></Form.Item>
-          {isRegister && <Form.Item name="confirmPassword" label="Xác nhận mật khẩu" dependencies={['password']} rules={[
-            { required: true, message: 'Vui lòng nhập lại mật khẩu.' },
+              ? Promise.resolve() : Promise.reject(new Error('Password exceeds 72 UTF-8 bytes. Please use a shorter password.')) },
+          ]}><Input.Password prefix={<LockOutlined />} placeholder={isRegister ? 'Create your password' : 'Enter your password'} autoComplete={isRegister ? 'new-password' : 'current-password'} maxLength={72} /></Form.Item>
+          {isRegister && <Form.Item name="confirmPassword" label="Confirm password" dependencies={['password']} rules={[
+            { required: true, message: 'Please confirm your password.' },
             ({ getFieldValue }) => ({ validator: (_, value: string) => !value || getFieldValue('password') === value
-              ? Promise.resolve() : Promise.reject(new Error('Mật khẩu xác nhận chưa khớp.')) }),
-          ]}><Input.Password prefix={<LockOutlined />} placeholder="Nhập lại mật khẩu" autoComplete="new-password" maxLength={72} /></Form.Item>}
+              ? Promise.resolve() : Promise.reject(new Error('Passwords do not match.')) }),
+          ]}><Input.Password prefix={<LockOutlined />} placeholder="Re-enter your password" autoComplete="new-password" maxLength={72} /></Form.Item>}
           <Button className="submit-button" type="primary" htmlType="submit" block loading={pending} icon={!pending && <ArrowRightOutlined />} iconPlacement="end">
-            {isRegister ? 'Tạo tài khoản' : 'Đăng nhập'}
+            {isRegister ? 'Create account' : 'Sign in'}
           </Button>
         </Form>
-        <p className="alternative">{isRegister ? 'Đã có tài khoản?' : 'Bạn mới biết đến FlowPay?'} <Link to={isRegister ? '/login' : '/register'}>{isRegister ? 'Đăng nhập' : 'Tạo tài khoản miễn phí'} <ArrowRightOutlined /></Link></p>
-        <div className="security-note"><SafetyCertificateOutlined /><span>Mật khẩu được bảo vệ khi lưu trữ.<br />Thông tin đăng nhập chỉ dành cho bạn.</span></div>
+        <p className="alternative">{isRegister ? 'Already have an account?' : 'New to FlowPay?'} <Link to={isRegister ? '/login' : '/register'}>{isRegister ? 'Sign in' : 'Create a free account'} <ArrowRightOutlined /></Link></p>
+        <div className="security-note"><SafetyCertificateOutlined /><span>Your password is securely stored.<br />Your sign-in details are yours alone.</span></div>
       </main>
-      <footer className="auth-footer"><span>© {new Date().getFullYear()} FlowPay</span><span><span className="language-dot" /> Tiếng Việt</span></footer>
+      <footer className="auth-footer"><span>© {new Date().getFullYear()} FlowPay</span><span><span className="language-dot" /> English</span></footer>
     </section>
   </div>
 }

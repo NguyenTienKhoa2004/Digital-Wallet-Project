@@ -2,7 +2,7 @@ import { createContext, useContext, useLayoutEffect, useEffect, useState } from 
 import type { ReactNode } from 'react'
 import { Button, ConfigProvider, theme } from 'antd'
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
-import viVN from 'antd/locale/vi_VN'
+import enUS from 'antd/locale/en_US'
 
 type Mode = 'light' | 'dark'
 const storageKey = 'flowpay:theme'
@@ -44,7 +44,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   return <ThemeContext.Provider value={{ mode, toggle }}>
-    <ConfigProvider locale={viVN} theme={{
+    <ConfigProvider locale={enUS} theme={{
       algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
       token: {
         colorPrimary: dark ? '#86b6ff' : '#376fe0',
@@ -56,9 +56,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         colorBgElevated: dark ? '#162642' : '#ffffff',
         colorBorder: dark ? '#2c3e5d' : '#d4def0',
         colorError: dark ? '#ee9385' : '#bd3f37',
-        borderRadius: 10,
+        borderRadius: 3,
+        borderRadiusXS: 3,
+        borderRadiusSM: 3,
+        borderRadiusLG: 3,
+        borderRadiusOuter: 3,
         controlHeightLG: 50,
-        fontFamily: '"Be Vietnam Pro", "Segoe UI", system-ui, sans-serif',
+        fontFamily: '"Noto Serif", Georgia, "Times New Roman", serif',
         fontSize: 14,
       },
       components: {
@@ -72,7 +76,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function ThemeToggle() {
   const context = useContext(ThemeContext)
   if (!context) throw new Error('ThemeToggle must be inside ThemeProvider')
-  const label = context.mode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
+  const label = context.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
   return <Button className="theme-toggle" icon={context.mode === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={context.toggle}
     aria-label={label} title={label} aria-pressed={context.mode === 'dark'} />
 }
