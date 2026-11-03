@@ -189,14 +189,34 @@ Flyway runs migrations before Hibernate validates the entities (`ddl-auto: valid
 
 ![FlowPay sign-in screen](docs/images/signin.png)
 
+Sign in with an email address and password to access the FlowPay wallet.
+
 ### Sign Up
 
 ![FlowPay sign-up screen](docs/images/signup.png)
 
+Create an account with a display name, email address, and password, with password confirmation and requirements shown in the form.
+
 ### Wallet Dashboard
 
-![FlowPay wallet dashboard](docs/images/mainpage.png)
+![FlowPay wallet dashboard](docs/images/walletpage.png)
+
+View the current balance(in USD), wallet status, and wallet holder, with quick actions for sending money and adding funds.
+
+### Add Funds
+
+![FlowPay add-funds panel](docs/images/addfunds.png)
+
+Add funds through a simulated payment provider by entering an amount or choosing a preset, with an optional note.
+
+### Send Money
+
+![FlowPay send-money panel](docs/images/transfer.png)
+
+Search for a recipient by username or email, enter a amount, and add an optional note before reviewing the transfer. The panel shows the available balance and the Details, Review, and Result steps.
 
 ### Transactions
 
-![FlowPay transactions screen](docs/images/transaction.png)
+![FlowPay recent transactions](docs/images/transactions.png)
+
+Browse recent wallet activity using the Top-ups and Transfers tabs. The top-up history shown includes transaction references, recipient names, dates, amounts, status badges, and pagination.
