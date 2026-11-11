@@ -1,4 +1,19 @@
 /* Transfer surfaces use the wallet's blue glass and warm orange accent. */
+.recipient-search { display: flex; gap: 8px; }
+.recipient-search > .ant-input-affix-wrapper { min-width: 0; }
+.recipient-help, .recipient-error { font-size: 11px; line-height: 1.8; margin: 10px 0; }
+.recipient-help { color: var(--text-secondary); }
+.recipient-error { color: var(--ant-color-error, #d84a4a); }
+.recipient-results { list-style: none; padding: 0; margin: 10px 0; border: 1px solid var(--border); border-radius: 3px; }
+.recipient-results li + li { border-top: 1px solid var(--border); }
+.recipient-results button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; border: 0; background: transparent; color: var(--text-main); text-align: left; font: inherit; cursor: pointer; }
+.recipient-results button:hover, .recipient-results button:focus-visible { background: var(--surface-soft); }
+.recipient-results button:disabled { cursor: default; opacity: .5; }
+.recipient-results strong, .recipient-selected strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.recipient-results small, .recipient-selected small, .recipient-summary-email { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 4px; overflow-wrap: anywhere; }
+.recipient-currency { font-size: 10px; color: var(--text-muted); }
+.recipient-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; margin-top: 12px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface-soft); }
+.recipient-selected > span { min-width: 0; }
 .transfer-drawer .ant-drawer-body, .transfer-detail-drawer .ant-drawer-body { padding: 28px; }
 .transfer-intro { position: relative; padding-bottom: 24px; }
 .transfer-intro .section-kicker { display: block; padding-top: 8px; color: var(--text-muted); }

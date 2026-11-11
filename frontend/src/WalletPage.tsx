@@ -347,10 +347,10 @@ export default function WalletPage({ token, user, onSignOut, onExpired }: Props)
     .reduce((total, item) => total + BigInt(item.amount), 0n)
     .toString()
 
-  async function copyWalletId() {
+  async function copyRecipientEmail() {
     if (!wallet) return
     try {
-      await navigator.clipboard.writeText(wallet.walletId)
+      await navigator.clipboard.writeText(user.email)
       setCopied(true)
     } catch {
       setCopied(false)
@@ -1177,8 +1177,8 @@ export default function WalletPage({ token, user, onSignOut, onExpired }: Props)
             </span>
             <h2>Recipient wallet details</h2>
             <p className="utility-description">
-              Share this wallet ID with another FlowPay user so they can send USD to you. No bank
-              details are needed.
+              Share your email with another FlowPay user. They can find you by email or username
+              and select you as the recipient.
             </p>
             {wallet ? (
               <>
@@ -1188,16 +1188,16 @@ export default function WalletPage({ token, user, onSignOut, onExpired }: Props)
                     <dd>{user.username}</dd>
                   </div>
                   <div>
-                    <dt>Wallet ID</dt>
-                    <dd className="mono">{wallet.walletId}</dd>
+                    <dt>Email</dt>
+                    <dd>{user.email}</dd>
                   </div>
                 </dl>
-                <Button block icon={<CopyOutlined />} onClick={() => void copyWalletId()}>
-                  {copied ? 'Wallet ID copied' : 'Copy wallet ID'}
+                <Button block icon={<CopyOutlined />} onClick={() => void copyRecipientEmail()}>
+                  {copied ? 'Email copied' : 'Copy email'}
                 </Button>
               </>
             ) : (
-              <Empty description="Create a wallet to view your wallet ID." />
+              <Empty description="Create a wallet to receive money." />
             )}
           </>
         )}

@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Drawer, Form, Input, Steps } from 'antd'
 import { ArrowRightOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EditOutlined, ReloadOutlined, SafetyCertificateOutlined, SendOutlined, WalletOutlined } from '@ant-design/icons'
 import { ApiError, createTransfer, getTransferByKey } from './api'
-import type { TransferPayload, Wallet } from './api'
+import type { Recipient, TransferPayload, Wallet } from './api'
 import { centsFromInput, money } from './money'
-import { readPendingTransfer, resolveTransfer, walletIdPattern } from './transfer-operation'
+import { readPendingTransfer, resolveTransfer } from './transfer-operation'
 import type { PendingTransfer, TransferOutcome } from './transfer-operation'
+import RecipientPicker from './RecipientPicker'
 import './transfer.css'
 
 interface Props {
@@ -20,7 +21,8 @@ interface Props {
   onExpired: () => void
   onChanged: () => void
 }
-interface Fields { destinationWalletId: string; amount: string; description: string }
+interface Fields { recipient: Recipient; amount: string; description: string }
+interface TransferReview extends TransferPayload { recipient: Recipient }
 interface Completed { operation: PendingTransfer; outcome: TransferOutcome }
 
 export default function TransferDrawer(props: Props) {
@@ -29,7 +31,7 @@ export default function TransferDrawer(props: Props) {
   const [pending, setPending] = useState<PendingTransfer | null>(() => {
     try { return readPendingTransfer(sessionStorage.getItem(storageKey)) } catch { return null }
   })
-  const [review, setReview] = useState<TransferPayload | null>(null)
+  const [review, setReview] = useState<TransferReview | null>(null)
   const [completed, setCompleted] = useState<Completed | null>(null)
   const [error, setError] = useState('')
   const [working, setWorking] = useState<'sending' | 'checking' | null>(null)
@@ -97,9 +99,14 @@ export default function TransferDrawer(props: Props) {
   function reviewTransfer(fields: Fields) {
     if (busy.current || pendingRef.current || !canSend) return
     const amount = centsFromInput(fields.amount)
-    if (!amount || !wallet || BigInt(amount) > BigInt(wallet.balance)) return
+    if (!amount || !wallet || !fields.recipient || BigInt(amount) > BigInt(wallet.balance)) return
     setError('')
-    setReview({ destinationWalletId: fields.destinationWalletId.trim().toLowerCase(), amount, description: fields.description || '' })
+    setReview({
+      destinationWalletId: fields.recipient.walletId,
+      recipient: fields.recipient,
+      amount,
+      description: fields.description || '',
+    })
   }
 
   function confirmTransfer() {
@@ -145,12 +152,10 @@ export default function TransferDrawer(props: Props) {
       {!pending && !completed && sourceUnavailable && <Alert className="transfer-alert" type="warning" showIcon title={sourceUnavailable} />}
       {error && <div role="alert"><Alert className="transfer-alert" type={pending ? 'warning' : 'error'} showIcon title={pending ? 'Outcome not yet confirmed' : 'Unable to send money'} description={error} /></div>}
       <div hidden={!!review || !!pending || !!completed}>
-        <Form<Fields> form={form} layout="vertical" requiredMark={false} disabled={!canSend} onFinish={reviewTransfer} initialValues={{ destinationWalletId: '', amount: '', description: '' }}>
-          <Form.Item name="destinationWalletId" label="Recipient wallet ID" extra="Ask the recipient to copy their wallet ID from Receive money." rules={[
-            { required: true, whitespace: true, message: 'Enter the recipient wallet ID.' },
-            { validator: (_, value: string) => !value || walletIdPattern.test(value.trim()) ? Promise.resolve() : Promise.reject(new Error('Enter a complete wallet UUID, for example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.')) },
-            { validator: (_, value: string) => !value || value.trim().toLowerCase() !== wallet?.walletId.toLowerCase() ? Promise.resolve() : Promise.reject(new Error('You cannot send money to your own wallet.')) },
-          ]}><Input size="large" prefix={<WalletOutlined />} placeholder="Paste recipient wallet ID" autoComplete="off" spellCheck={false} maxLength={38} /></Form.Item>
+        <Form<Fields> form={form} layout="vertical" requiredMark={false} disabled={!canSend} onFinish={reviewTransfer} initialValues={{ amount: '', description: '' }}>
+          <Form.Item name="recipient" label="Recipient" extra="Search by username (at least 3 characters) or exact email, then choose a person." rules={[
+            { required: true, message: 'Search for and select a recipient.' },
+          ]}><RecipientPicker token={token} disabled={!canSend} onExpired={props.onExpired} /></Form.Item>
           <Form.Item name="amount" label="Amount to send" extra="USD, up to 2 decimal places. No transfer fee." rules={[
             { required: true, message: 'Enter an amount to send.' },
             { validator: (_, value: string) => {
@@ -167,8 +172,8 @@ export default function TransferDrawer(props: Props) {
       </div>
       {review && <div className="transfer-review">
         <div className="transfer-review-amount"><span>YOU ARE SENDING</span><h3>{money(review.amount)} <small>USD</small></h3></div>
-        <dl className="transfer-summary"><div><dt>Recipient wallet</dt><dd className="mono">{review.destinationWalletId}</dd></div><div><dt>From</dt><dd>Your FlowPay wallet</dd></div><div><dt>Note</dt><dd>{review.description || 'No note'}</dd></div><div><dt>Transfer fee</dt><dd>$0.00</dd></div><div className="transfer-total"><dt>Total debit</dt><dd>{money(review.amount)} USD</dd></div></dl>
-        <p className="transfer-footnote"><SafetyCertificateOutlined /> Check the wallet ID carefully. FlowPay does not look up the recipient name.</p>
+        <dl className="transfer-summary"><div><dt>Recipient</dt><dd>{review.recipient.username}<small className="recipient-summary-email">{review.recipient.maskedEmail}</small></dd></div><div><dt>From</dt><dd>Your FlowPay wallet</dd></div><div><dt>Note</dt><dd>{review.description || 'No note'}</dd></div><div><dt>Transfer fee</dt><dd>$0.00</dd></div><div className="transfer-total"><dt>Total debit</dt><dd>{money(review.amount)} USD</dd></div></dl>
+        <p className="transfer-footnote"><SafetyCertificateOutlined /> Check the recipient name and email before confirming.</p>
         {reviewUnavailable && !sourceUnavailable && <Alert className="transfer-alert" type="warning" showIcon title={reviewUnavailable} />}
         <Button className="transfer-primary" type="primary" size="large" block disabled={!!reviewUnavailable} icon={<SendOutlined />} onClick={confirmTransfer}>Confirm & send {money(review.amount)}</Button>
         <Button className="transfer-secondary" block icon={<EditOutlined />} onClick={() => { setReview(null); setError('') }}>Edit details</Button>
@@ -178,7 +183,7 @@ export default function TransferDrawer(props: Props) {
         <h3>{pending ? working === 'sending' ? 'Sending your money…' : 'Confirming your transfer' : failed ? 'Transfer not completed' : 'Money sent. Just like that.'}</h3>
         <div className="transfer-result-amount">{money(resultPayload.amount)} <small>USD</small></div>
         <p>{pending ? 'The outcome is not confirmed yet. We check automatically every 5 seconds. Your original request is saved.' : outcome?.kind === 'rejected' ? outcome.message : failed ? 'No money was moved for this transfer.' : 'Your transfer has been confirmed by FlowPay.'}</p>
-        <dl className="transfer-summary"><div><dt>Recipient wallet</dt><dd className="mono">{resultPayload.destinationWalletId}</dd></div>{reference && <div><dt>Transaction reference</dt><dd className="mono">{reference}</dd></div>}<div><dt>Note</dt><dd>{resultPayload.description || 'No note'}</dd></div>{result?.completedAt && <div><dt>Completed</dt><dd>{new Date(result.completedAt).toLocaleString('en-US')}</dd></div>}{result?.failureCode && <div><dt>Reason</dt><dd>{result.failureCode}</dd></div>}</dl>
+        <dl className="transfer-summary"><div><dt>Recipient</dt><dd>{resultPayload.recipient ? <>{resultPayload.recipient.username}<small className="recipient-summary-email">{resultPayload.recipient.maskedEmail}</small></> : resultPayload.destinationWalletId}</dd></div>{reference && <div><dt>Transaction reference</dt><dd className="mono">{reference}</dd></div>}<div><dt>Note</dt><dd>{resultPayload.description || 'No note'}</dd></div>{result?.completedAt && <div><dt>Completed</dt><dd>{new Date(result.completedAt).toLocaleString('en-US')}</dd></div>}{result?.failureCode && <div><dt>Reason</dt><dd>{result.failureCode}</dd></div>}</dl>
         {pending ? <><Button block icon={<ReloadOutlined spin={working === 'checking'} />} disabled={!!working} onClick={() => void run(pending, 'checking')}>Check status</Button><Button className="transfer-secondary" block loading={working === 'sending'} disabled={!!working} onClick={() => void run(pending, 'sending')}>Retry the same transfer</Button><p className="transfer-recovery-note">Retrying keeps the same request ID and details to prevent sending twice.</p></> : <><Button className="transfer-primary" type="primary" size="large" block onClick={startAnother}>{failed ? 'Start a new transfer' : 'Send another transfer'}</Button><Button className="transfer-secondary" block onClick={onClose}>Back to wallet</Button></>}
       </div>}
       {!pending && !completed && <p className="transfer-footnote"><SafetyCertificateOutlined /> Only the wallet you are signed in to can send funds.</p>}

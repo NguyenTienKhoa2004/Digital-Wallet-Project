@@ -41,7 +41,7 @@ const messages: Record<string, string> = {
   CURRENCY_MISMATCH: 'Both wallets must support USD transfers.',
   WALLET_ACCESS_DENIED: 'You do not have permission to send from this wallet.',
   TRANSFER_NOT_FOUND: 'This transfer could not be found or is not accessible.',
-  INVALID_REQUEST_BODY: 'Check the recipient wallet ID, amount and note.',
+  INVALID_REQUEST_BODY: 'Check the recipient, amount and note.',
   INVALID_IDEMPOTENCY_KEY: 'The request ID is invalid. Please start a new request.',
   TOP_UP_NOT_FOUND: 'This top-up transaction could not be found.',
 }
@@ -139,6 +139,17 @@ export const createTopUp = (token: string, key: string, payload: TopUpPayload) =
 export interface Transfer extends TopUp { sourceWalletId: string }
 export interface TransferHistory extends Omit<TopUpHistory, 'items'> { items: Transfer[] }
 export interface TransferPayload extends TopUpPayload { destinationWalletId: string }
+
+export interface Recipient {
+  walletId: string
+  username: string
+  maskedEmail: string
+  currency: 'USD'
+}
+
+export const searchRecipients = (token: string, query: string) => request<Recipient[]>(
+  `/transfers/recipients/search?q=${encodeURIComponent(query)}`, {}, token,
+)
 
 export const getTransfers = (token: string, page: number) => request<TransferHistory>(`/transfers?page=${page}&size=5`, {}, token)
 export const getTransfer = (token: string, reference: string) => request<Transfer>(`/transfers/${encodeURIComponent(reference)}`, {}, token)

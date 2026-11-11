@@ -1,8 +1,8 @@
 import { ApiError } from './api.ts'
-import type { Transfer, TransferPayload } from './api.ts'
+import type { Recipient, Transfer, TransferPayload } from './api.ts'
 import { maxAmount } from './money.ts'
 
-export interface PendingTransfer extends TransferPayload { key: string }
+export interface PendingTransfer extends TransferPayload { key: string; recipient?: Recipient }
 export type TransferOutcome = { kind: 'confirmed'; transfer: Transfer } | { kind: 'rejected'; code: string; message: string; reference?: string }
 export const walletIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -38,6 +38,19 @@ export function readPendingTransfer(raw: string | null): PendingTransfer | null 
       || BigInt(item.amount) <= 0n || BigInt(item.amount) > maxAmount
       || typeof item.description !== 'string' || item.description.length > 255) return null
     // Explicitly copy only recovery fields; never restore credentials from storage.
-    return { key: item.key, destinationWalletId: item.destinationWalletId, amount: item.amount, description: item.description }
+    const operation: PendingTransfer = {
+      key: item.key, destinationWalletId: item.destinationWalletId, amount: item.amount, description: item.description,
+    }
+    // Display details are optional: old saved requests must remain recoverable.
+    const recipient = item.recipient
+    if (recipient && recipient.walletId === operation.destinationWalletId && recipient.currency === 'USD'
+      && typeof recipient.username === 'string' && recipient.username.length <= 255
+      && typeof recipient.maskedEmail === 'string' && recipient.maskedEmail.length <= 324) {
+      operation.recipient = {
+        walletId: recipient.walletId, username: recipient.username,
+        maskedEmail: recipient.maskedEmail, currency: recipient.currency,
+      }
+    }
+    return operation
   } catch { return null }
 }
