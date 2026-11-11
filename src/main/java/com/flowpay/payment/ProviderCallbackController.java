@@ -35,7 +35,7 @@ public class ProviderCallbackController {
     public void callback(@RequestHeader(value = "X-Callback-Key", required = false) String key,
             @RequestBody ProviderPaymentResult result) {
         if (key == null || !MessageDigest.isEqual(expectedKey, key.getBytes(StandardCharsets.UTF_8))) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CALLBACK_KEY", "A valid callback key is required.");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CALLBACK_KEY", "A valid callback key must be provided.");
         }
         settlement.accept(result, "CALLBACK");
     }

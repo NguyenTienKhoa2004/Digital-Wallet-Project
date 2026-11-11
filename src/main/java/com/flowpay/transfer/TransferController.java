@@ -1,7 +1,9 @@
 package com.flowpay.transfer;
 
+import java.util.List;
 import java.util.UUID;
 
+import com.flowpay.transfer.dto.RecipientResponse;
 import com.flowpay.transfer.dto.TransferHistoryResponse;
 import com.flowpay.transfer.dto.TransferRequest;
 import com.flowpay.transfer.dto.TransferResponse;
@@ -29,10 +31,21 @@ public class TransferController {
 
     private final TransferService transferService;
     private final TransferQueryService queryService;
+    private final RecipientService recipientService;
 
-    public TransferController(TransferService transferService, TransferQueryService queryService) {
+    public TransferController(TransferService transferService, TransferQueryService queryService,
+            RecipientService recipientService) {
         this.transferService = transferService;
         this.queryService = queryService;
+        this.recipientService = recipientService;
+    }
+
+    @GetMapping("/recipients/search")
+    public List<RecipientResponse> searchRecipients(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "q", defaultValue = "") String query) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        return recipientService.search(currentUserId, query);
     }
 
     @PostMapping
