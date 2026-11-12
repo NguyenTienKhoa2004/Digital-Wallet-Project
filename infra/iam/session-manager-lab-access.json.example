@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartSessionOnFlowPayLabInstances",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ec2:ap-southeast-1:561366509908:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "ssm:resourceTag/Project": "FlowPay",
+          "ssm:resourceTag/Environment": "lab"
+        }
+      }
+    },
+    {
+      "Sid": "UseDefaultSessionShellDocument",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ssm:ap-southeast-1:561366509908:document/SSM-SessionManagerRunShell"
+    },
+    {
+      "Sid": "ConnectAndManageOwnSessions",
+      "Effect": "Allow",
+      "Action": [
+        "ssmmessages:OpenDataChannel",
+        "ssm:ResumeSession",
+        "ssm:TerminateSession"
+      ],
+      "Resource": [
+        "arn:aws:ssm:ap-southeast-1:561366509908:session/${aws:username}-*",
+        "arn:aws:ssm:ap-southeast-1:561366509908:session/${aws:userid}-*"
+      ]
+    }
+  ]
+}
